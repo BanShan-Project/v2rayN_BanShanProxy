@@ -380,7 +380,13 @@ public partial class ProfilesViewModel : MyReactiveObject
 
     public async Task RefreshSubscriptions()
     {
-        var subItems = await AppManager.Instance.SubItems();
+        var subItems = await AppManager.Instance.SubItems() ?? [];
+        // The BanShan login subscription is managed by the account page: never show it as a group.
+        subItems.RemoveAll(t => BanShanHandler.IsManagedSubItem(t));
+        if (BanShanHandler.IsManagedSubId(_config.SubIndexId))
+        {
+            _config.SubIndexId = string.Empty;
+        }
         subItems.Insert(0, new SubItem { Remarks = ResUI.AllGroupServers });
 
         SubItems.ReplaceRange(subItems);
@@ -419,7 +425,7 @@ public partial class ProfilesViewModel : MyReactiveObject
                         Network = t.Network,
                         StreamSecurity = t.StreamSecurity,
                         Subid = t.Subid,
-                        SubRemarks = t.SubRemarks,
+                        SubRemarks = BanShanHandler.IsManagedSubId(t.Subid) ? string.Empty : t.SubRemarks,
                         IsActive = t.IndexId == _config.IndexId,
                         Sort = t33?.Sort ?? 0,
                         Delay = t33?.Delay ?? 0,
@@ -473,6 +479,11 @@ public partial class ProfilesViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(ResUI.PleaseSelectServer);
             return;
         }
+        if (BanShanHandler.IsManagedProfile(item))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         var eConfigType = item.ConfigType;
 
         bool? ret = false;
@@ -508,6 +519,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         {
             return;
         }
+        if (lstSelected.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         if (await ShowYesNoInteraction.HandleSafe(ResUI.RemoveServer) == false)
         {
             return;
@@ -529,6 +545,11 @@ public partial class ProfilesViewModel : MyReactiveObject
 
     private async Task RemoveDuplicateServer()
     {
+        if (ProfileItems.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         if (await ShowYesNoInteraction.HandleSafe(ResUI.RemoveServer) == false)
         {
             return;
@@ -548,6 +569,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         var lstSelected = await GetProfileItems(false);
         if (lstSelected == null)
         {
+            return;
+        }
+        if (lstSelected.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
             return;
         }
         if (await ConfigHandler.CopyServer(_config, lstSelected) == 0)
@@ -598,6 +624,11 @@ public partial class ProfilesViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(ResUI.PleaseSelectServer);
             return;
         }
+        if (BanShanHandler.IsManagedProfile(item))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         var url = FmtHandler.GetShareUri(item);
         if (url.IsNullOrEmpty())
         {
@@ -638,6 +669,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         {
             return;
         }
+        if (ProfileItems.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
 
         _dicHeaderSort.TryAdd(colName, true);
         _dicHeaderSort.TryGetValue(colName, out var asc);
@@ -651,6 +687,11 @@ public partial class ProfilesViewModel : MyReactiveObject
 
     public async Task RemoveInvalidServerResult()
     {
+        if (ProfileItems.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         var count = await ConfigHandler.RemoveInvalidServerResult(_config, _config.SubIndexId);
         await RefreshServers();
         NoticeManager.Instance.Enqueue(string.Format(ResUI.RemoveInvalidServerResultTip, count));
@@ -662,6 +703,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         var lstSelected = await GetProfileItems(true);
         if (lstSelected == null)
         {
+            return;
+        }
+        if (lstSelected.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
             return;
         }
 
@@ -682,6 +728,11 @@ public partial class ProfilesViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(ResUI.PleaseSelectServer);
             return;
         }
+        if (ProfileItems.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
 
         if (await ConfigHandler.MoveServer(_config, lstProfile, index, eMove) == 0)
         {
@@ -691,8 +742,13 @@ public partial class ProfilesViewModel : MyReactiveObject
 
     public async Task MoveServerTo(int startIndex, ProfileItemModel targetItem)
     {
+        if (ProfileItems.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         var targetIndex = ProfileItems.IndexOf(targetItem);
-        if (startIndex >= 0 && targetIndex >= 0 && startIndex != targetIndex)
+        if (startIndex >= 0 && startIndex < ProfileItems.Count && targetIndex >= 0 && startIndex != targetIndex)
         {
             var lstProfile = ProfileItems?.Select(t => t.IndexId).ToList() ?? [];
             if (await ConfigHandler.MoveServer(_config, lstProfile, startIndex, EMove.Position, targetIndex) == 0)
@@ -710,6 +766,11 @@ public partial class ProfilesViewModel : MyReactiveObject
             insertIndex < 0 ||
             insertIndex > ProfileItems.Count)
         {
+            return;
+        }
+        if (ProfileItems.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
             return;
         }
 
@@ -775,6 +836,11 @@ public partial class ProfilesViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(ResUI.PleaseSelectServer);
             return;
         }
+        if (BanShanHandler.IsManagedProfile(item))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
 
         var (context, validatorResult) = await CoreConfigContextBuilder.Build(_config, item);
         if (NoticeManager.Instance.NotifyValidatorResult(validatorResult) && !validatorResult.Success)
@@ -807,6 +873,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         {
             return;
         }
+        if (BanShanHandler.IsManagedProfile(item))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         var (context, validatorResult) = await CoreConfigContextBuilder.Build(_config, item);
         if (NoticeManager.Instance.NotifyValidatorResult(validatorResult) && !validatorResult.Success)
         {
@@ -828,6 +899,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         var lstSelected = await GetProfileItems(true);
         if (lstSelected == null)
         {
+            return;
+        }
+        if (lstSelected.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
             return;
         }
 
@@ -861,6 +937,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         var lstSelected = await GetProfileItems(true);
         if (lstSelected == null)
         {
+            return;
+        }
+        if (lstSelected.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
             return;
         }
 
@@ -901,6 +982,11 @@ public partial class ProfilesViewModel : MyReactiveObject
                 return;
             }
         }
+        if (BanShanHandler.IsManagedSubItem(item))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
         var subEditViewModel = new SubEditViewModel(item);
         if (await AppManager.Instance.WindowDialog.ShowDialogAsync(subEditViewModel) == true)
         {
@@ -914,6 +1000,11 @@ public partial class ProfilesViewModel : MyReactiveObject
         var item = await AppManager.Instance.GetSubItem(_config.SubIndexId);
         if (item is null)
         {
+            return;
+        }
+        if (BanShanHandler.IsManagedSubItem(item))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
             return;
         }
 

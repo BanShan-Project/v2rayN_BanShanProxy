@@ -99,7 +99,7 @@
 
                     <MenuItem x:Name="menuReload" Header="{x:Static resx:ResUI.menuReload}" />
 
-                    <MenuItem x:Name="menuPromotion" Header="{x:Static resx:ResUI.menuPromotion}" />
+                    <MenuItem x:Name="menuLogin" Header="登录" />
 
                     <MenuItem x:Name="menuClose" Header="{x:Static resx:ResUI.menuExit}" />
                 </Menu>

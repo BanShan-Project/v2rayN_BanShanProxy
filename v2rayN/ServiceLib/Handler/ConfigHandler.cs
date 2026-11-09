@@ -2276,6 +2276,11 @@ public static class ConfigHandler
         {
             return 0;
         }
+        if (await IsManagedSubscriptionUrl(url))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return -1;
+        }
         SubItem subItem = new()
         {
             Id = string.Empty,
@@ -2302,6 +2307,20 @@ public static class ConfigHandler
     }
 
     /// <summary>
+    /// The BanShan subscription URL must not be imported as a second, visible subscription.
+    /// </summary>
+    private static async Task<bool> IsManagedSubscriptionUrl(string? url)
+    {
+        if (url.IsNullOrEmpty())
+        {
+            return false;
+        }
+        var login = await AppManager.Instance.GetSubItem(BanShanHandler.SubId);
+        return login?.Url.IsNotEmpty() == true
+               && string.Equals(login.Url, url, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Add or update a subscription item
     /// </summary>
     /// <param name="config">Current configuration</param>
@@ -2309,6 +2328,11 @@ public static class ConfigHandler
     /// <returns>0 if successful, -1 if failed</returns>
     public static async Task<int> AddSubItem(Config config, SubItem subItem)
     {
+        if (!BanShanHandler.IsManagedSubItem(subItem) && await IsManagedSubscriptionUrl(subItem.Url))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return -1;
+        }
         var item = await AppManager.Instance.GetSubItem(subItem.Id);
         if (item is null)
         {
@@ -2398,6 +2422,10 @@ public static class ConfigHandler
     /// <returns>0 if successful</returns>
     public static async Task<int> DeleteSubItem(Config config, string id)
     {
+        if (BanShanHandler.IsManagedSubId(id))
+        {
+            return -1;
+        }
         var item = await AppManager.Instance.GetSubItem(id);
         if (item is null)
         {
@@ -2424,6 +2452,11 @@ public static class ConfigHandler
     /// <returns>0 if successful</returns>
     public static async Task<int> MoveToGroup(Config config, List<ProfileItem> lstProfile, string subid)
     {
+        if (BanShanHandler.IsManagedSubId(subid)
+            || lstProfile.Any(t => BanShanHandler.IsManagedProfile(t)))
+        {
+            return -1;
+        }
         foreach (var item in lstProfile)
         {
             item.Subid = subid;

@@ -53,6 +53,12 @@ public partial class SubEditViewModel : MyReactiveObject, ICloseable
 
     private async Task SaveSubAsync()
     {
+        if (BanShanHandler.IsManagedSubItem(SelectedSource))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
+        }
+
         var remarks = SelectedSource.Remarks;
         if (remarks.IsNullOrEmpty())
         {

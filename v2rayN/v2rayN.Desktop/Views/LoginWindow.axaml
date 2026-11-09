@@ -1,0 +1,56 @@
+<Window
+    x:Class="v2rayN.Desktop.Views.LoginWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="半山代理登录"
+    Width="440"
+    MinWidth="400"
+    CanResize="False"
+    SizeToContent="Height"
+    ShowInTaskbar="False"
+    WindowStartupLocation="CenterOwner"
+    mc:Ignorable="d">
+
+    <StackPanel Margin="28" Spacing="14">
+        <TextBlock
+            FontSize="22"
+            FontWeight="SemiBold"
+            Text="半山代理登录" />
+        <TextBlock
+            Foreground="{DynamicResource SemiColorTextSecondary}"
+            Text="使用半山代理账号登录。登录成功后会自动导入订阅，该订阅和节点受保护，不会出现在订阅列表中。"
+            TextWrapping="Wrap" />
+
+        <TextBox
+            x:Name="txtUsername"
+            Margin="0,8,0,0"
+            PlaceholderText="用户名" />
+        <TextBox
+            x:Name="txtPassword"
+            PasswordChar="●"
+            PlaceholderText="密码" />
+
+        <TextBlock
+            x:Name="txtStatus"
+            MinHeight="20"
+            Foreground="{DynamicResource SemiColorTextSecondary}"
+            TextWrapping="Wrap" />
+
+        <StackPanel
+            HorizontalAlignment="Right"
+            Orientation="Horizontal"
+            Spacing="10">
+            <Button
+                x:Name="btnCancel"
+                MinWidth="88"
+                Content="取消" />
+            <Button
+                x:Name="btnLogin"
+                MinWidth="96"
+                Classes="Primary"
+                Content="登录" />
+        </StackPanel>
+    </StackPanel>
+</Window>

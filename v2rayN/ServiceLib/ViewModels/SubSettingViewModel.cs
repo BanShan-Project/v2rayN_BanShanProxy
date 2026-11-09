@@ -24,7 +24,9 @@ public partial class SubSettingViewModel : MyReactiveObject
 
         var canEditRemove = this.WhenAnyValue(
            x => x.SelectedSource,
-           selectedSource => selectedSource != null && !selectedSource.Id.IsNullOrEmpty());
+           selectedSource => selectedSource != null
+                              && !selectedSource.Id.IsNullOrEmpty()
+                              && !BanShanHandler.IsManagedSubItem(selectedSource));
 
         SubAddCmd = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -55,7 +57,8 @@ public partial class SubSettingViewModel : MyReactiveObject
 
     public async Task RefreshSubItems()
     {
-        SubItems.ReplaceRange(await AppManager.Instance.SubItems());
+        var items = await AppManager.Instance.SubItems() ?? [];
+        SubItems.ReplaceRange(items.Where(t => !BanShanHandler.IsManagedSubItem(t)));
     }
 
     public async Task EditSubAsync(bool blNew)
@@ -72,6 +75,11 @@ public partial class SubSettingViewModel : MyReactiveObject
             {
                 return;
             }
+        }
+        if (BanShanHandler.IsManagedSubItem(item))
+        {
+            NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+            return;
         }
         var subEditViewModel = new SubEditViewModel(item);
         if (await AppManager.Instance.WindowDialog.ShowDialogAsync(subEditViewModel) == true)
@@ -90,6 +98,11 @@ public partial class SubSettingViewModel : MyReactiveObject
 
         foreach (var it in SelectedSources ?? [SelectedSource])
         {
+            if (BanShanHandler.IsManagedSubItem(it))
+            {
+                NoticeManager.Instance.Enqueue(BanShanHandler.ProtectedMessage);
+                continue;
+            }
             await ConfigHandler.DeleteSubItem(_config, it.Id);
         }
         await RefreshSubItems();

@@ -30,7 +30,7 @@ public partial class MainWindow : WindowBase<MainWindowViewModel>
 
         KeyDown += MainWindow_KeyDown;
         menuSettingsSetUWP.Click += MenuSettingsSetUWP_Click;
-        menuPromotion.Click += MenuPromotion_Click;
+        menuLogin.Click += MenuLogin_Click;
         menuCheckUpdate.Click += MenuCheckUpdate_Click;
         btnNewUpdate.Click += MenuCheckUpdate_Click;
         menuBackupAndRestore.Click += MenuBackupAndRestore_Click;
@@ -246,9 +246,27 @@ public partial class MainWindow : WindowBase<MainWindowViewModel>
         }
     }
 
-    private void MenuPromotion_Click(object? sender, RoutedEventArgs e)
+    private async void MenuLogin_Click(object? sender, RoutedEventArgs e)
     {
-        ProcUtils.ProcessStart($"{Utils.Base64Decode(Global.PromotionUrl)}?t={DateTime.Now.Ticks}");
+        try
+        {
+            var loginWindow = new LoginWindow();
+            if (await loginWindow.ShowDialog<bool?>(this) != true)
+            {
+                return;
+            }
+
+            if (ViewModel != null)
+            {
+                await ViewModel.RefreshAfterLoginAsync();
+            }
+            NoticeManager.Instance.Enqueue("半山代理登录成功，订阅已导入。");
+        }
+        catch (Exception ex)
+        {
+            Logging.SaveLog("MenuLogin", ex);
+            NoticeManager.Instance.Enqueue($"打开登录窗口失败：{ex.Message}");
+        }
     }
 
     private void MenuSettingsSetUWP_Click(object? sender, RoutedEventArgs e)

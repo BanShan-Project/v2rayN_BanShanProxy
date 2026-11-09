@@ -10,10 +10,6 @@
 		<CETCompat>false</CETCompat>
 	</PropertyGroup>
 
-    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
-        <RuntimeHostConfigurationOption Include="System.Net.Security.UseNetworkFramework" Value="true" />
-    </ItemGroup>
-    
 	<ItemGroup>
 		<PackageReference Include="Avalonia.AvaloniaEdit" />
 		<PackageReference Include="Avalonia.Desktop" />
@@ -29,7 +25,6 @@
 		<PackageReference Include="ReactiveUI">
 			<TreatAsUsed>true</TreatAsUsed>
 		</PackageReference>
-		<PackageReference Include="SkiaSharp.NativeAssets.Linux" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -47,9 +42,6 @@
 		  <DependentUpon>FullConfigTemplateWindow.axaml</DependentUpon>
 		</Compile>
 		<None Update="v2rayN.png">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="v2rayN.icns">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>

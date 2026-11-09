@@ -585,6 +585,15 @@ public partial class MainWindowViewModel : MyReactiveObject
         });
     }
 
+    /// <summary>After a BanShan login the hidden subscription's nodes become visible in the all-groups view.</summary>
+    public async Task RefreshAfterLoginAsync()
+    {
+        _config.SubIndexId = string.Empty;
+        await RefreshSubscriptions();
+        await ProfilesViewModel.RefreshServersBiz();
+        await StatusBarViewModel.RefreshServersBiz();
+    }
+
     #endregion Subscription
 
     #region Setting

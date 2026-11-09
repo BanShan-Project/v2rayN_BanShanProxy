@@ -1,0 +1,92 @@
+name: Release Windows (Avalonia)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (for example v7.25.6)
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build and package Windows x64 / arm64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+
+          function Build-Arch([string]$arch, [string]$coreArch) {
+            $rid = "win-$arch"
+            $out = "out/$rid"
+            Write-Host "Publishing $rid to $out"
+            dotnet publish ./v2rayN/AmazTool/AmazTool.csproj -c Release -r $rid `
+              -p:SelfContained=true -p:PublishTrimmed=true -o $out
+            if ($LASTEXITCODE -ne 0) { throw "AmazTool publish failed for $rid" }
+            dotnet publish ./v2rayN/v2rayN.Desktop/v2rayN.Desktop.csproj -c Release -r $rid `
+              -p:SelfContained=true -o $out
+            if ($LASTEXITCODE -ne 0) { throw "v2rayN publish failed for $rid" }
+
+            Get-ChildItem $out -Recurse -File -Include *.pdb | Remove-Item -Force
+
+            $zip = Join-Path (Resolve-Path artifacts).Path "v2rayN-windows-$coreArch.zip"
+            Invoke-WebRequest `
+              -Uri "https://github.com/2dust/v2rayN-core-bin/raw/refs/heads/master/v2rayN-windows-$coreArch.zip" `
+              -OutFile $zip
+
+            # Use the upstream core-bin zip as the package base and add the published app files
+            # at its root. This avoids depending on 7-Zip being installed on the runner.
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $outFull = (Resolve-Path $out).Path
+            $archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Update)
+            try {
+              foreach ($file in Get-ChildItem $outFull -Recurse -File) {
+                $relative = $file.FullName.Substring($outFull.Length).TrimStart('\').TrimStart('/').Replace('\', '/')
+                $entry = $archive.GetEntry($relative)
+                if ($entry) { $entry.Delete() }
+                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                  $archive, $file.FullName, $relative,
+                  [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+              }
+            } finally {
+              $archive.Dispose()
+            }
+          }
+
+          Build-Arch 'x64' '64'
+          Build-Arch 'arm64' 'arm64'
+
+          Get-ChildItem artifacts | Select-Object Name, Length
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/v2rayN-windows-64.zip
+            artifacts/v2rayN-windows-arm64.zip

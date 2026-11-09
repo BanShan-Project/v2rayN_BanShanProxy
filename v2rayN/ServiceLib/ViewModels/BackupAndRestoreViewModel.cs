@@ -136,6 +136,10 @@ public partial class BackupAndRestoreViewModel : MyReactiveObject
             var toPath = Utils.GetConfigPath();
             FileUtils.ZipExtractToFile(fileName, toPath, "");
 
+            // A backup must never carry the BanShan login subscription. Older backups may still
+            // contain it, so drop it (and its config references) before the app restarts.
+            BanShanHandler.RemoveFromConfigDir(toPath);
+
             if (Utils.IsWindows())
             {
                 ProcUtils.RebootAsAdmin(false);
@@ -167,6 +171,8 @@ public partial class BackupAndRestoreViewModel : MyReactiveObject
         var configDirTemp = Path.Combine(configDirZipTemp, _guiConfigs);
 
         FileUtils.CopyDirectory(configDir, configDirTemp, false, true, "");
+        // The login subscription is account-bound: strip it (and its nodes) from the copy.
+        BanShanHandler.RemoveFromConfigDir(configDirTemp);
         var ret = FileUtils.CreateFromDirectory(configDirZipTemp, fileName);
         Directory.Delete(configDirZipTemp, true);
         return await Task.FromResult(ret);
