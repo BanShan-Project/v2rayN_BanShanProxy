@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag (for example v7.25.6)
+        description: Release tag (for example v7.25.7)
         required: true
         type: string
   push:
@@ -38,41 +38,82 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force artifacts | Out-Null
 
+          # The in-app updater compares SemanticVersion(current assembly version) with the latest
+          # release tag. Directory.Build.props carries the upstream version, so stamp the tag into
+          # the build; otherwise a v7.25.7 release still reports 7.25.6 and every start offers the
+          # same update again.
+          $appVersion = $env:RELEASE_TAG.Trim()
+          if ($appVersion.StartsWith('v') -or $appVersion.StartsWith('V')) { $appVersion = $appVersion.Substring(1) }
+          if ($appVersion -notmatch '^\d+\.\d+\.\d+') { throw "RELEASE_TAG must look like v7.25.7, got '$env:RELEASE_TAG'" }
+          Write-Host "Application version: $appVersion"
+
+          # AmazTool (the self-updater) strips exactly one leading directory from every zip entry:
+          #   var lst = entry.FullName.Split('/'); var fullName = string.Join("/", lst[1..]);
+          # and skips entries without a directory (lst.Length == 1).
+          # So the package must have ONE top level folder, the same layout as the official
+          # v2rayN-windows-64.zip / v2rayN-windows-64-desktop.zip. Publishing the app files to the
+          # archive root makes the updater skip v2rayN.exe and every dll, and leaves them next to a
+          # second "v2rayN-windows-64" folder that only holds bin/.
           function Build-Arch([string]$arch, [string]$coreArch) {
             $rid = "win-$arch"
             $out = "out/$rid"
+            $pkgDir = "v2rayN-windows-$coreArch"
             Write-Host "Publishing $rid to $out"
             dotnet publish ./v2rayN/AmazTool/AmazTool.csproj -c Release -r $rid `
-              -p:SelfContained=true -p:PublishTrimmed=true -o $out
+              -p:SelfContained=true -p:PublishTrimmed=true -p:Version=$appVersion -o $out
             if ($LASTEXITCODE -ne 0) { throw "AmazTool publish failed for $rid" }
             dotnet publish ./v2rayN/v2rayN.Desktop/v2rayN.Desktop.csproj -c Release -r $rid `
-              -p:SelfContained=true -o $out
+              -p:SelfContained=true -p:Version=$appVersion -o $out
             if ($LASTEXITCODE -ne 0) { throw "v2rayN publish failed for $rid" }
 
-            Get-ChildItem $out -Recurse -File -Include *.pdb | Remove-Item -Force
+            Get-ChildItem $out -Recurse -File -Include *.pdb, *.debug, *.dbg, *.sym | Remove-Item -Force
 
             $zip = Join-Path (Resolve-Path artifacts).Path "v2rayN-windows-$coreArch.zip"
-            Invoke-WebRequest `
-              -Uri "https://github.com/2dust/v2rayN-core-bin/raw/refs/heads/master/v2rayN-windows-$coreArch.zip" `
-              -OutFile $zip
+            & curl.exe -fsSL --retry 5 --retry-all-errors `
+              -o $zip "https://github.com/2dust/v2rayN-core-bin/raw/refs/heads/master/v2rayN-windows-$coreArch.zip"
+            if ($LASTEXITCODE -ne 0) { throw "core-bin download failed for $coreArch" }
 
-            # Use the upstream core-bin zip as the package base and add the published app files
-            # at its root. This avoids depending on 7-Zip being installed on the runner.
             Add-Type -AssemblyName System.IO.Compression.FileSystem
-            $outFull = (Resolve-Path $out).Path
-            $archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Update)
+
+            # Stage the published app inside a folder named after the top level package folder and
+            # let 7-Zip merge it into the core-bin archive, exactly like upstream package-zip.yml.
+            # 7-Zip also rewrites the archive cleanly, which System.IO.Compression.ZipArchive.Update
+            # cannot do for archives that use data descriptors.
+            $sevenZip = (Get-Command 7z -ErrorAction SilentlyContinue).Source
+            if (-not $sevenZip) { $sevenZip = "$env:ProgramFiles\7-Zip\7z.exe" }
+            if (-not (Test-Path $sevenZip)) { throw "7-Zip not found" }
+
+            $stageRoot = Join-Path $PWD "stage/$rid"
+            if (Test-Path $stageRoot) { Remove-Item $stageRoot -Recurse -Force }
+            $stageDir = Join-Path $stageRoot $pkgDir
+            New-Item -ItemType Directory -Force $stageDir | Out-Null
+            Copy-Item (Join-Path (Resolve-Path $out).Path '*') $stageDir -Recurse -Force
+
+            Push-Location $stageRoot
             try {
-              foreach ($file in Get-ChildItem $outFull -Recurse -File) {
-                $relative = $file.FullName.Substring($outFull.Length).TrimStart('\').TrimStart('/').Replace('\', '/')
-                $entry = $archive.GetEntry($relative)
-                if ($entry) { $entry.Delete() }
-                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                  $archive, $file.FullName, $relative,
-                  [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+              & $sevenZip a -tZip $zip $pkgDir -mx1 | Out-Null
+              if ($LASTEXITCODE -ne 0) { throw "7-Zip packaging failed for $coreArch" }
+            } finally {
+              Pop-Location
+            }
+
+            # Guard: every entry must live under $pkgDir (the updater relies on it).
+            $check = [System.IO.Compression.ZipFile]::OpenRead($zip)
+            try {
+              $bad = $check.Entries | Where-Object {
+                $n = $_.FullName.Replace('\', '/')
+                $n.TrimEnd('/') -ne $pkgDir -and -not $n.StartsWith("$pkgDir/")
+              }
+              if ($bad) {
+                throw "zip layout broken, entries outside ${pkgDir}/: $($bad[0].FullName)"
               }
             } finally {
-              $archive.Dispose()
+              $check.Dispose()
             }
+
+            # ServiceLib.UpdateService.GetUrlFromCore rewrites the GUI url to "-desktop.zip"
+            # (Avalonia detection via libHarfBuzzSharp.dll), so ship that name as well.
+            Copy-Item $zip (Join-Path (Resolve-Path artifacts).Path "v2rayN-windows-$coreArch-desktop.zip") -Force
           }
 
           Build-Arch 'x64' '64'
@@ -89,4 +130,6 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             artifacts/v2rayN-windows-64.zip
+            artifacts/v2rayN-windows-64-desktop.zip
             artifacts/v2rayN-windows-arm64.zip
+            artifacts/v2rayN-windows-arm64-desktop.zip

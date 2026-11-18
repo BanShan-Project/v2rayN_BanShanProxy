@@ -49,7 +49,7 @@ public partial class LoginWindow : Window
         ShowStatus("正在登录...", isError: false);
         try
         {
-            var result = await BanShanHandler.LoginAsync(AppManager.Instance.Config, userName, password);
+            var result = await BanShanHandler.LoginAsync(userName, password);
             if (result.Success)
             {
                 Close(true);

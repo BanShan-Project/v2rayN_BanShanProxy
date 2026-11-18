@@ -46,7 +46,7 @@ public static class BanShanHandler
 
     public static async Task<SubItem?> GetSubItem()
     {
-        return await AppManager.Instance.GetSubItem(SubId);
+        return await ConfigDbQuery.GetSubItem(SubId);
     }
 
     public static async Task<bool> IsLoggedIn()
@@ -63,7 +63,7 @@ public static class BanShanHandler
     /// Signs in, stores the subscription and imports its nodes. If a previous login exists and the
     /// new account is broken, the previous address is restored and its nodes are kept.
     /// </summary>
-    public static async Task<LoginResult> LoginAsync(Config config, string userName, string password)
+    public static async Task<LoginResult> LoginAsync(string userName, string password)
     {
         var account = userName.Trim();
         if (account.IsNullOrEmpty() || password.IsNullOrEmpty())
@@ -71,7 +71,7 @@ public static class BanShanHandler
             return new LoginResult(false, "请输入用户名和密码。");
         }
 
-        var previous = await AppManager.Instance.GetSubItem(SubId);
+        var previous = await ConfigDbQuery.GetSubItem(SubId);
         var previousUrl = previous?.Url;
         var previousMemo = previous?.Memo;
 
@@ -91,7 +91,7 @@ public static class BanShanHandler
             AutoUpdateInterval = 6 * 60,
             Memo = account,
         };
-        if (await ConfigHandler.AddSubItem(config, item) != 0)
+        if (await ConfigDbHandler.AddSubItem(item) != 0)
         {
             return new LoginResult(false, "登录订阅保存失败。");
         }
@@ -99,7 +99,7 @@ public static class BanShanHandler
         var messages = new List<string>();
         try
         {
-            var subHandler = new SubscriptionHandler(config, false, (_, message) =>
+            var subHandler = new SubscriptionHandler(ConfigTextHandler.Config, false, (_, message) =>
             {
                 if (!message.IsNullOrEmpty())
                 {
@@ -114,14 +114,14 @@ public static class BanShanHandler
             Logging.SaveLog("BanShanLogin", ex);
         }
 
-        var profiles = await AppManager.Instance.ProfileItems(SubId) ?? [];
+        var profiles = await ConfigDbQuery.ProfileItems(SubId) ?? [];
         if (profiles.Count == 0)
         {
             // A first, broken login must not leave a hidden "logged in" row behind. An existing
             // login keeps the old address (and its old nodes) instead.
             if (previousUrl.IsNullOrEmpty())
             {
-                var created = await AppManager.Instance.GetSubItem(SubId);
+                var created = await ConfigDbQuery.GetSubItem(SubId);
                 if (created != null)
                 {
                     await SQLiteHelper.Instance.DeleteAsync(created);
@@ -131,7 +131,7 @@ public static class BanShanHandler
             {
                 previous.Url = previousUrl;
                 previous.Memo = previousMemo;
-                await ConfigHandler.AddSubItem(config, previous);
+                await ConfigDbHandler.AddSubItem(previous);
             }
 
             var detail = messages.LastOrDefault();
@@ -140,7 +140,7 @@ public static class BanShanHandler
         }
 
         // Make the freshly imported nodes visible: the "all groups" view includes the hidden sub.
-        config.SubIndexId = string.Empty;
+        ConfigTextHandler.Config.SubIndexId = string.Empty;
         return new LoginResult(true, $"登录成功，已导入 {profiles.Count} 个节点。", profiles.Count, newUrl);
     }
 
