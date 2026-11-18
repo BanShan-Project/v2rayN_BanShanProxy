@@ -15,6 +15,16 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="Assets/GlobalResources.axaml" />
             </ResourceDictionary.MergedDictionaries>
+            <!--
+                GlobalStyles.axaml binds every control to these resources, but they used to be
+                written only from ThemeSettingViewModel and only when the saved value was
+                >= Global.MinFontSize. A fresh install (or any config without CurrentFontSize)
+                left them undefined, so the setters resolved to nothing and the UI fell back to
+                the Avalonia default 12 instead of Semi's SemiFontSizeRegular 14.
+                14 / 27 / Noto Sans SC is exactly what SemiTheme + FontManagerOptions gave before.
+            -->
+            <x:Double x:Key="AppFontSize">14</x:Double>
+            <x:Double x:Key="DataGridRowHeight">27</x:Double>
         </ResourceDictionary>
     </Application.Resources>
     <Application.Styles>

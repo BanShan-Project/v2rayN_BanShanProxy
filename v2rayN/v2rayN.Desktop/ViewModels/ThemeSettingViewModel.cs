@@ -4,6 +4,9 @@ namespace v2rayN.Desktop.ViewModels;
 
 public partial class ThemeSettingViewModel : MyReactiveObject
 {
+    /// <summary>Semi's SemiFontSizeRegular, the size the UI had before the resource based font settings.</summary>
+    private const double DefaultAppFontSize = 14;
+
     [Reactive] public partial string CurrentTheme { get; set; }
 
     [Reactive] public partial int CurrentFontSize { get; set; }
@@ -32,7 +35,7 @@ public partial class ThemeSettingViewModel : MyReactiveObject
         CurrentLanguage = _config.UiItem.CurrentLanguage;
 
         // Set Default Value
-        ModifyFontSizeEx(12);
+        ModifyFontSizeEx(DefaultAppFontSize);
 
         this.WhenAnyValue(x => x.CurrentTheme)
             .Where(y => y.IsNotEmpty())
@@ -96,9 +99,15 @@ public partial class ThemeSettingViewModel : MyReactiveObject
         double size = CurrentFontSize;
         if (size < Global.MinFontSize)
         {
+            // Not configured yet: write the default instead of leaving AppFontSize undefined,
+            // otherwise GlobalStyles.axaml resolves the font size setters to nothing.
+            size = DefaultAppFontSize;
+        }
+        if (Application.Current is null)
+        {
             return;
         }
-        Application.Current!.Resources["AppFontSize"] = size;
+        Application.Current.Resources["AppFontSize"] = size;
         ModifyFontSizeEx(size);
     }
 
