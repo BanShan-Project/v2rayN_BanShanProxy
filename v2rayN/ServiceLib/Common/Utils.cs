@@ -941,7 +941,14 @@ public class Utils
     {
         try
         {
-            return Assembly.GetExecutingAssembly()?.GetName()?.Version?.ToString(3) ?? "0.0";
+            var version = Assembly.GetExecutingAssembly()?.GetName()?.Version;
+            if (version is null)
+            {
+                return "0.0";
+            }
+            // Release tags like v7.25.6.1 carry a fourth component and it has to reach the update
+            // check, otherwise the running build reports 7.25.6 and never sees the newer tag.
+            return version.Revision > 0 ? version.ToString(4) : version.ToString(3);
         }
         catch (Exception ex)
         {
